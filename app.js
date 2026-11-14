@@ -3,7 +3,8 @@
   const $ = id => document.getElementById(id);
   const roots = ['autotraders.ae','carswitch.com','dubicars.com','dubizzle.com','opensooq.com','yallamotor.com'];
   const safeUrl = (value, listing) => {
-    try { const u = new URL(value); if(u.protocol !== 'https:' || u.username || u.password || u.search || u.hash || u.port || !u.hostname.includes('.') || /^\d+(\.\d+){3}$/.test(u.hostname) || u.hostname.endsWith('.local')) return null;
+    try { const u = new URL(value); if(u.protocol !== 'https:' || u.username || u.password || u.hash || u.port || !u.hostname.includes('.') || /^\d+(\.\d+){3}$/.test(u.hostname) || u.hostname.endsWith('.local')) return null;
+      if(u.search && (listing || u.hostname!=='dbz-images.dubizzle.com' || !/^\?impolicy=[A-Za-z0-9_-]{1,64}$/.test(u.search)))return null;
       if(listing && !roots.some(h => u.hostname === h || u.hostname.endsWith('.'+h))) return null; return u.href;
     } catch { return null; }
   };
