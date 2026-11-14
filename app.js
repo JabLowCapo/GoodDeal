@@ -13,7 +13,7 @@
   const number = value => Number.isFinite(value) ? new Intl.NumberFormat('en-AE',{maximumFractionDigits:0}).format(value) : '—';
   const node = (tag, cls, text) => { const el=document.createElement(tag); if(cls)el.className=cls; if(text!==undefined)el.textContent=text; return el; };
   const date = value => { const d=new Date(value); if(!value || !Number.isFinite(d.getTime()))return null; return new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Dubai',day:'numeric',month:'long',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true}).format(d)+' UAE (UTC+4)'; };
-  let rows=[], visible=[], shown=0;
+  let rows=[], visible=[], shown=0, loaded=false, hasAnalysis=false;
   const pageSize=40;
   function card(row) {
     const a=node('a','card'); a.href=safeUrl(row.originalUrl,true); a.target='_blank';a.rel='noopener noreferrer';
@@ -30,17 +30,17 @@
     end.append(indicators,node('span','open','View original listing ↗'));a.append(body,end);return a;
   }
   function append(){const fragment=document.createDocumentFragment();visible.slice(shown,shown+pageSize).forEach(r=>fragment.append(card(r)));$('listings').append(fragment);shown=Math.min(shown+pageSize,visible.length);$('more').hidden=shown>=visible.length;}
-  function render(){const query=$('search').value.trim().toLocaleLowerCase(), marketplace=$('marketplace').value;
+  function render(){if(!loaded)return;const query=$('search').value.trim().toLocaleLowerCase(), marketplace=$('marketplace').value;
     visible=rows.filter(r=>(!marketplace || r.marketplace===marketplace) && [r.make,r.model,r.trim].join(' ').toLocaleLowerCase().includes(query));
     const sorts={'price-low':(a,b)=>a.currentPrice-b.currentPrice,'price-high':(a,b)=>b.currentPrice-a.currentPrice,'year-new':(a,b)=>b.modelYear-a.modelYear,'year-old':(a,b)=>a.modelYear-b.modelYear,'drop':(a,b)=>(b.priceDropPercent??-1)-(a.priceDropPercent??-1),'signals':(a,b)=>signals(b).filter(s=>s==='yes').length-signals(a).filter(s=>s==='yes').length,'recent':(a,b)=>new Date(b.firstSeenAt)-new Date(a.firstSeenAt)};
     visible.sort((a,b)=>(sorts[$('sort').value]||sorts.recent)(a,b)||a.marketplaceListingId-b.marketplaceListingId);
     $('listings').replaceChildren();shown=0;$('count').textContent=`${visible.length} of ${rows.length} listings`;
-    $('message').hidden=visible.length>0;$('message').textContent=rows.length ? 'No listings match your filters.' : 'No qualifying Good Deals are currently available.';append();
+    $('message').hidden=visible.length>0;$('message').textContent=rows.length ? 'No listings match your filters.' : hasAnalysis ? 'No qualifying Good Deals are currently available.' : 'The shortlist is ready. Listings will appear after the first successful Good Deal analysis.';append();
   }
   async function load(){try{const response=await fetch('data/good-deals.json',{cache:'no-store'});if(!response.ok)throw new Error('unavailable'); const data=await response.json();
       if(data.schemaVersion!==1 || !Array.isArray(data.listings) || data.totalListings!==data.listings.length || !Number.isSafeInteger(data.snapshotId) || data.snapshotId<0 || (data.snapshotId>0 && !date(data.lastGoodDealRunUtc)))throw new Error('invalid snapshot');
       if(data.listings.some(r=>!safeUrl(r.originalUrl,true)||!Number.isFinite(r.currentPrice)||typeof r.make!=='string'||typeof r.model!=='string'))throw new Error('invalid listing');
-      rows=data.listings;$('updated').textContent='Last Good Deal Update: '+(date(data.lastGoodDealRunUtc)||'awaiting the first successful analysis');$('total').textContent=`Total Good Deals: ${rows.length}`;
+      rows=data.listings;loaded=true;hasAnalysis=data.snapshotId>0;$('updated').textContent='Last Good Deal Update: '+(date(data.lastGoodDealRunUtc)||'awaiting the first successful analysis');$('total').textContent=`Total Good Deals: ${rows.length}`;
       [...new Set(rows.map(r=>r.marketplace))].sort().forEach(m=>{const option=node('option','',m);option.value=m;$('marketplace').append(option);});render();
       if(data.snapshotId===0 && rows.length===0)$('message').textContent='The shortlist is ready. Listings will appear after the first successful Good Deal analysis.';
     }catch{$('message').hidden=false;$('message').textContent='The latest shortlist could not be loaded. Please refresh to try again.';$('updated').textContent='Last Good Deal Update: unavailable';$('total').textContent='Total Good Deals: unavailable';}}
