@@ -33,6 +33,7 @@
   const excludedMakes = new Set([
     'BYD', 'Build Your Dreams', 'بي واي دي',
     'Changan', 'Changan Auto', 'Changan Automobile', 'شانجان', 'تشنجان',
+    'JAC', 'JAC Motor', 'JAC Motors', 'جاك', 'جاك موتورز',
     'Jetour', 'جيتور',
     'MG', 'MG Motor', 'MG Motors', 'Morris Garages', 'ام جي',
     'Geely', 'Geely Auto', 'جيلي',
