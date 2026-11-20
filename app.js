@@ -1,6 +1,7 @@
 'use strict';
 (() => {
   const $ = id => document.getElementById(id);
+  const brandFilter = $('exclude-chinese-brands');
   const roots = ['autotraders.ae','carswitch.com','dubicars.com','dubizzle.com','opensooq.com','yallamotor.com'];
   const safeUrl = (value, listing) => {
     try { const u = new URL(value); if(u.protocol !== 'https:' || u.username || u.password || u.hash || u.port || !u.hostname.includes('.') || /^\d+(\.\d+){3}$/.test(u.hostname) || u.hostname.endsWith('.local')) return null;
@@ -24,14 +25,34 @@
   const evidenceLevel = row => Object.hasOwn(levels,row.priceEvidence?.level) ? row.priceEvidence.level : 'Unassessed';
   const byRecent = (a,b) => Date.parse(b.firstSeenAt)-Date.parse(a.firstSeenAt);
   const evidenceRank = (a,b) => (levels[evidenceLevel(b)] ?? 0)-(levels[evidenceLevel(a)] ?? 0) || byRecent(a,b);
+  function makeKey(make) {
+    return (make ?? '').normalize('NFKC').toLowerCase().replace(/[أإآ]/g, 'ا')
+      .replace(/[\s._'’\p{Pd}\u0640\u064B-\u0652\u200E\u200F]/gu, '');
+  }
+  // Exact make labels, including spellings used by UAE marketplaces.
+  const excludedMakes = new Set([
+    'BYD', 'Build Your Dreams', 'بي واي دي',
+    'Changan', 'Changan Auto', 'Changan Automobile', 'شانجان', 'تشنجان',
+    'Jetour', 'جيتور',
+    'MG', 'MG Motor', 'MG Motors', 'Morris Garages', 'ام جي',
+    'Geely', 'Geely Auto', 'جيلي',
+    'GAC', 'GAC Motor', 'GAC Motors', 'جي إي سي', 'جي إيه سي',
+    'Haval', 'GWM Haval', 'Great Wall Haval', 'هافال',
+    'Chery', 'Chery Automobile', 'شيري',
+    'Exeed', 'Chery Exeed', 'إكسيد',
+    'Hongqi', 'FAW Hongqi', 'هونشي', 'هونغشي',
+    'XPeng', 'XPeng Motors', 'اكس بنغ', 'إكس بينج',
+    'Zeekr', 'زيكر',
+  ].map(makeKey));
   let rows=[], visible=[], shown=0, loaded=false, hasAnalysis=false;
   const pageSize=40;
   function card(row) {
     const a=node('a','card'); a.href=safeUrl(row.originalUrl,true); a.target='_blank';a.rel='noopener noreferrer';
-    a.setAttribute('aria-label',`${row.modelYear} ${row.make} ${row.model}, ${number(row.currentPrice)} ${row.currency}. Open original listing`);
+    const vehicleName=[row.make?.trim(),row.model].filter(Boolean).join(' ');
+    a.setAttribute('aria-label',`${row.modelYear} ${vehicleName}, ${number(row.currentPrice)} ${row.currency}. Open original listing`);
     const fallback=()=>node('div','photo placeholder'); const url=safeUrl(row.primaryImageUrl,false);
-    if(url){const img=node('img','photo');img.src=url;img.alt=`${row.make} ${row.model}`;img.loading='lazy';img.referrerPolicy='no-referrer';img.width=172;img.height=126;img.addEventListener('error',()=>img.replaceWith(fallback()),{once:true});a.append(img);}else a.append(fallback());
-    const body=node('div','vehicle');body.append(node('div','source',`${row.marketplace} · ${row.modelYear}`),node('h3','vehicle-title',[row.make,row.model,row.trim].filter(Boolean).join(' ')),node('div','price',`${row.currency} ${number(row.currentPrice)}`));
+    if(url){const img=node('img','photo');img.src=url;img.alt=vehicleName;img.loading='lazy';img.referrerPolicy='no-referrer';img.width=172;img.height=126;img.addEventListener('error',()=>img.replaceWith(fallback()),{once:true});a.append(img);}else a.append(fallback());
+    const body=node('div','vehicle');body.append(node('div','source',`${row.marketplace} · ${row.modelYear}`),node('h3','vehicle-title',[vehicleName,row.trim].filter(Boolean).join(' ')),node('div','price',`${row.currency} ${number(row.currentPrice)}`));
     if(row.firstObservedPrice != null)body.append(node('div','first-price',`First seen at ${row.currency} ${number(row.firstObservedPrice)}`));
     if(Number.isFinite(row.priceDropAmount) && row.priceDropAmount>0)body.append(node('div','price-change',`Down ${row.currency} ${number(row.priceDropAmount)}${Number.isFinite(row.priceDropPercent)?' · '+row.priceDropPercent.toFixed(1)+'%':''}`));
     body.append(node('div','usage',`${row.mileageKm == null ? 'Mileage unavailable' : number(row.mileageKm)+' km'} · ${number(row.daysListed)} days listed`));
@@ -53,7 +74,9 @@
   function append(){const fragment=document.createDocumentFragment();visible.slice(shown,shown+pageSize).forEach(r=>fragment.append(card(r)));$('listings').append(fragment);shown=Math.min(shown+pageSize,visible.length);$('more').hidden=shown>=visible.length;}
   function render(){if(!loaded)return;const query=$('search').value.trim().toLocaleLowerCase(), marketplace=$('marketplace').value;
     const evidence=$('evidence').value, region=$('region').value;
-    visible=rows.filter(r=>(!marketplace || r.marketplace===marketplace) && (!evidence || evidenceLevel(r)===evidence) &&
+    const excludeChineseBrands=brandFilter?.checked;
+    visible=rows.filter(r=>(!excludeChineseBrands || !excludedMakes.has(makeKey(r.make))) &&
+      (!marketplace || r.marketplace===marketplace) && (!evidence || evidenceLevel(r)===evidence) &&
       (!region || r.priceEvidence?.region===region) && [r.make,r.model,r.trim].join(' ').toLocaleLowerCase().includes(query));
     const sorts={'price-low':(a,b)=>a.currentPrice-b.currentPrice,'price-high':(a,b)=>b.currentPrice-a.currentPrice,'year-new':(a,b)=>b.modelYear-a.modelYear,'year-old':(a,b)=>a.modelYear-b.modelYear,'drop':(a,b)=>(b.priceDropPercent??-1)-(a.priceDropPercent??-1),'signals':(a,b)=>signals(b).filter(s=>s==='yes').length-signals(a).filter(s=>s==='yes').length,'recent':(a,b)=>new Date(b.firstSeenAt)-new Date(a.firstSeenAt)};
     sorts.evidence=evidenceRank;
@@ -68,7 +91,7 @@
       for(const row of data.listings){
         if(!row || !Number.isSafeInteger(row.marketplaceListingId) || row.marketplaceListingId<=0 || ids.has(row.marketplaceListingId) ||
           !safeUrl(row.originalUrl,true) || !Number.isFinite(row.currentPrice) || row.currentPrice<=0 ||
-          typeof row.make!=='string' || !row.make.trim() || typeof row.model!=='string' || !row.model.trim())throw new Error('invalid listing');
+          (row.make!=null && typeof row.make!=='string') || typeof row.model!=='string' || !row.model.trim())throw new Error('invalid listing');
         ids.add(row.marketplaceListingId);
       }
       rows=data.listings;loaded=true;hasAnalysis=data.snapshotId>0;$('updated').textContent='Last Good Deal Update: '+(date(data.lastGoodDealRunUtc)||'awaiting the first successful analysis');$('total').textContent=`Total Good Deals: ${rows.length}`;
@@ -81,5 +104,6 @@
     }catch{$('message').hidden=false;$('message').textContent='The latest shortlist could not be loaded. Please refresh to try again.';$('updated').textContent='Last Good Deal Update: unavailable';$('total').textContent='Total Good Deals: unavailable';}}
   $('search').addEventListener('input',render);
   for(const id of ['marketplace','region','evidence','sort'])$(id).addEventListener('change',render);
+  brandFilter?.addEventListener('change',render);
   $('more').addEventListener('click',append);load();
 })();
