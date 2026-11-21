@@ -1,4 +1,4 @@
-'use strict';
+import { chineseBrandForMake } from './chinese-makes.mjs?v=1';
 (() => {
   const $ = id => document.getElementById(id);
   const brandFilter = $('exclude-chinese-brands');
@@ -25,29 +25,6 @@
   const evidenceLevel = row => Object.hasOwn(levels,row.priceEvidence?.level) ? row.priceEvidence.level : 'Unassessed';
   const byRecent = (a,b) => Date.parse(b.firstSeenAt)-Date.parse(a.firstSeenAt);
   const evidenceRank = (a,b) => (levels[evidenceLevel(b)] ?? 0)-(levels[evidenceLevel(a)] ?? 0) || byRecent(a,b);
-  function makeKey(make) {
-    return (make ?? '').normalize('NFKC').toLowerCase().replace(/[أإآ]/g, 'ا')
-      .replace(/[\s._'’\p{Pd}\u0640\u064B-\u0652\u200E\u200F]/gu, '');
-  }
-  // Exact make labels, including spellings used by UAE marketplaces.
-  const excludedMakes = new Set([
-    'BYD', 'Build Your Dreams', 'بي واي دي',
-    'Changan', 'Changan Auto', 'Changan Automobile', 'شانجان', 'تشنجان',
-    'JAC', 'JAC Motor', 'JAC Motors', 'جاك', 'جاك موتورز',
-    'Jetour', 'جيتور',
-    'MG', 'MG Motor', 'MG Motors', 'Morris Garages', 'ام جي',
-    'Geely', 'Geely Auto', 'جيلي',
-    'GAC', 'GAC Motor', 'GAC Motors', 'جي إي سي', 'جي إيه سي',
-    'Haval', 'GWM Haval', 'Great Wall Haval', 'هافال',
-    'Chery', 'Chery Automobile', 'شيري',
-    'Exeed', 'Chery Exeed', 'إكسيد',
-    'Fengon', 'DFSK Fengon', 'Dongfeng Fengon', 'Fengguang', 'Dongfeng Fengguang', 'فينغون',
-    'DFSK', 'DFSK Motor', 'Dongfeng Sokon', 'دي إف إس كي',
-    'Dongfeng', 'دونغ فينغ',
-    'Hongqi', 'FAW Hongqi', 'هونشي', 'هونغشي',
-    'XPeng', 'XPeng Motors', 'اكس بنغ', 'إكس بينج',
-    'Zeekr', 'زيكر',
-  ].map(makeKey));
   let rows=[], visible=[], shown=0, loaded=false, hasAnalysis=false;
   const pageSize=40;
   function card(row) {
@@ -79,7 +56,7 @@
   function render(){if(!loaded)return;const query=$('search').value.trim().toLocaleLowerCase(), marketplace=$('marketplace').value;
     const evidence=$('evidence').value, region=$('region').value;
     const excludeChineseBrands=brandFilter?.checked;
-    visible=rows.filter(r=>(!excludeChineseBrands || !excludedMakes.has(makeKey(r.make))) &&
+    visible=rows.filter(r=>(!excludeChineseBrands || !chineseBrandForMake(r.make, r.marketplace)) &&
       (!marketplace || r.marketplace===marketplace) && (!evidence || evidenceLevel(r)===evidence) &&
       (!region || r.priceEvidence?.region===region) && [r.make,r.model,r.trim].join(' ').toLocaleLowerCase().includes(query));
     const sorts={'price-low':(a,b)=>a.currentPrice-b.currentPrice,'price-high':(a,b)=>b.currentPrice-a.currentPrice,'year-new':(a,b)=>b.modelYear-a.modelYear,'year-old':(a,b)=>a.modelYear-b.modelYear,'drop':(a,b)=>(b.priceDropPercent??-1)-(a.priceDropPercent??-1),'signals':(a,b)=>signals(b).filter(s=>s==='yes').length-signals(a).filter(s=>s==='yes').length,'recent':(a,b)=>new Date(b.firstSeenAt)-new Date(a.firstSeenAt)};
